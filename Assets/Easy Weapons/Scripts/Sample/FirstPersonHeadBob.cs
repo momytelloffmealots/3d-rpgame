@@ -342,6 +342,9 @@ public class FirstPersonHeadBob : MonoBehaviour
                 case "Wood":
                     surfaceValue = 2f; // Giá trị 2 cho Wood Floor trong FMOD
                     break;
+                case "water":
+                    surfaceValue = 3f; // Giá trị 3 cho Water trong FMOD
+                    break;
                 case "Ground":
                 default:
                     // Nếu vật thể có tag "Ground", hoặc "Untagged", hoặc bất cứ tag nào khác không có ở trên
