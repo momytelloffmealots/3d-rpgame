@@ -2,117 +2,95 @@ using UnityEngine;
 
 public class SurfaceInteractionAudio : MonoBehaviour
 {
-    public enum SurfaceType
-    {
-        Default,
-        Grass,
-        Stone,
-        Wood,
-        Metal,
-        Water,
-        Sand,
-        Snow
-    }
-
     [System.Serializable]
     public class SurfaceAudio
     {
-        public SurfaceType type;
+        [Tooltip("Nhập tên Tag (VD: Ground, Wood). Nhập 'Any' để phát khi chạm bất kỳ bề mặt nào.")]
+        public string targetTag = "Any";
+
         public AudioClip[] clips;
         [Range(0f, 1f)] public float volume = 1f;
-        [Range(0.8f, 1.2f)] public float minPitch = 0.95f;
-        [Range(0.8f, 1.2f)] public float maxPitch = 1.05f;
+        [Range(-1.2f, 1.2f)] public float minPitch = 0.95f;
+        [Range(0, 1.2f)] public float maxPitch = 1.05f;
     }
 
-    [Header("Detection")]
-    [SerializeField] private LayerMask surfaceMask;
-    [SerializeField] private float rayDistance = 2f;
+    [Header("Detection (Bật tick này nếu dùng cho Nhân vật)")]
+    public bool useRaycast = false;
+    public float rayDistance = 2f;
 
     [Header("Audio")]
-    [SerializeField] private AudioSource audioSource;
-    [SerializeField] private SurfaceAudio[] surfaces;
+    public AudioSource audioSource;
+    public SurfaceAudio[] surfaces;
 
-    private SurfaceType currentSurface = SurfaceType.Default;
+    private string currentSurfaceTag = "Untagged";
 
     private void Update()
     {
-        DetectSurface();
+        // Chỉ dò đường liên tục nếu dùng cho nhân vật (Giúp tối ưu FPS cho vỏ đạn)
+        if (useRaycast)
+        {
+            DetectSurface();
+        }
     }
 
     private void DetectSurface()
     {
         Ray ray = new Ray(transform.position, Vector3.down);
 
-        if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, surfaceMask))
+        if (Physics.Raycast(ray, out RaycastHit hit, rayDistance))
         {
-            currentSurface = GetSurfaceType(hit.collider.gameObject);
+            currentSurfaceTag = hit.collider.tag;
         }
         else
         {
-            currentSurface = SurfaceType.Default;
+            currentSurfaceTag = "Untagged";
         }
     }
 
-    private SurfaceType GetSurfaceType(GameObject obj)
+    // Tự động kích hoạt khi vật thể vật lý (vỏ đạn) đập vào vật khác
+    private void OnCollisionEnter(Collision collision)
     {
-        // Ví dụ đơn giản: kiểm tra layer
-        if (obj.layer == LayerMask.NameToLayer("Grass"))
-            return SurfaceType.Grass;
-
-        if (obj.layer == LayerMask.NameToLayer("Stone"))
-            return SurfaceType.Stone;
-
-        if (obj.layer == LayerMask.NameToLayer("Wood"))
-            return SurfaceType.Wood;
-
-        if (obj.layer == LayerMask.NameToLayer("Metal"))
-            return SurfaceType.Metal;
-
-        if (obj.layer == LayerMask.NameToLayer("Water"))
-            return SurfaceType.Water;
-
-        if (obj.layer == LayerMask.NameToLayer("Sand"))
-            return SurfaceType.Sand;
-
-        if (obj.layer == LayerMask.NameToLayer("Snow"))
-            return SurfaceType.Snow;
-
-        return SurfaceType.Default;
+        currentSurfaceTag = collision.gameObject.tag;
+        PlayInteraction();
     }
 
     public void PlayInteraction()
     {
-        SurfaceAudio data = GetSurfaceAudio(currentSurface);
+        if (audioSource == null) return;
 
-        if (data == null || data.clips == null || data.clips.Length == 0)
-            return;
+        SurfaceAudio data = GetSurfaceAudio(currentSurfaceTag);
+
+        // Bỏ qua nếu không có dữ liệu
+        if (data == null || data.clips == null || data.clips.Length == 0) return;
 
         AudioClip clip = data.clips[Random.Range(0, data.clips.Length)];
+        if (clip == null) return;
 
-        audioSource.pitch = Random.Range(
-            data.minPitch,
-            data.maxPitch
-        );
-
-        audioSource.PlayOneShot(
-            clip,
-            data.volume
-        );
+        // Random cao độ và phát tiếng
+        audioSource.pitch = Random.Range(data.minPitch, data.maxPitch);
+        audioSource.PlayOneShot(clip, data.volume);
     }
 
-    private SurfaceAudio GetSurfaceAudio(SurfaceType type)
+    private SurfaceAudio GetSurfaceAudio(string tag)
     {
+        // 1. Ưu tiên tìm chính xác Tag va chạm (VD: Ground)
         foreach (SurfaceAudio surface in surfaces)
         {
-            if (surface.type == type)
-                return surface;
+            if (surface.targetTag == tag) return surface;
+        }
+
+        // 2. Dự phòng: Nếu không có Tag đó, tìm mục có chữ "Any"
+        foreach (SurfaceAudio surface in surfaces)
+        {
+            if (surface.targetTag == "Any") return surface;
+        }
+
+        // 3. Dự phòng cuối: Nếu không có Any, tìm "Untagged"
+        foreach (SurfaceAudio surface in surfaces)
+        {
+            if (surface.targetTag == "Untagged") return surface;
         }
 
         return null;
-    }
-
-    public SurfaceType GetCurrentSurface()
-    {
-        return currentSurface;
     }
 }
