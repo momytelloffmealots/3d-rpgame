@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// Health.cs
 /// Author: MutantGopher
 /// This is a sample health script.  If you use a different script for health,
@@ -15,7 +15,7 @@ public class Health : MonoBehaviour
 	
 	public float startingHealth = 100.0f;		// The amount of health to start with
 	public float maxHealth = 100.0f;			// The maximum amount of health
-	private float currentHealth;				// The current ammount of health
+	protected float currentHealth;				// The current ammount of health
 
 	public bool replaceWhenDead = false;		// Whether or not a dead replacement should be instantiated.  (Useful for breaking/shattering/exploding effects)
 	public GameObject deadReplacement;			// The prefab to instantiate when this GameObject dies
@@ -25,16 +25,19 @@ public class Health : MonoBehaviour
 	public bool isPlayer = false;				// Whether or not this health is the player
 	public GameObject deathCam;					// The camera to activate when the player dies
 
-	private bool dead = false;					// Used to make sure the Die() function isn't called twice
+	protected bool dead = false;					// Used to make sure the Die() function isn't called twice
+
+	public float CurrentHealth => currentHealth;
+	public bool IsDead => dead;
 
 	// Use this for initialization
-	void Start()
+	public virtual void Start()
 	{
 		// Initialize the currentHealth variable to the value specified by the user in startingHealth
 		currentHealth = startingHealth;
 	}
 
-	public void ChangeHealth(float amount)
+	public virtual void ChangeHealth(float amount)
 	{
 		// Change the health by the amount specified in the amount variable
 		currentHealth += amount;
@@ -48,7 +51,7 @@ public class Health : MonoBehaviour
 			currentHealth = maxHealth;
 	}
 
-	public void Die()
+	public virtual void Die()
 	{
 		// This GameObject is officially dead.  This is used to make sure the Die() function isn't called again
 		dead = true;
