@@ -19,9 +19,22 @@ public class MenuAudioManager : MonoBehaviour
 
     // Biến lưu trữ lại mức âm lượng SFX của Unity trước khi bị Mute
     private float savedUnitySfxVolume = 1f;
+    private bool isInitialized = false;
 
-    void Start()
+    void Awake()
     {
+        InitializeAudio();
+    }
+
+    void OnEnable()
+    {
+        InitializeAudio();
+    }
+
+    private void InitializeAudio()
+    {
+        if (isInitialized) return;
+
         // 1. KẾT NỐI VỚI CÁC KÊNH TRONG FMOD
         bgmBus = RuntimeManager.GetBus("bus:/BGM");
         sfxBus = RuntimeManager.GetBus("bus:/SFX");
@@ -29,12 +42,14 @@ public class MenuAudioManager : MonoBehaviour
         // 2. GẮN SỰ KIỆN CHO BGM
         if (bgmSlider != null)
         {
+            bgmSlider.onValueChanged.RemoveListener(SetBGMVolume);
             bgmSlider.value = 1f;
             bgmSlider.onValueChanged.AddListener(SetBGMVolume);
         }
 
         if (muteBgmToggle != null)
         {
+            muteBgmToggle.onValueChanged.RemoveListener(ToggleMuteBGM);
             muteBgmToggle.isOn = false;
             muteBgmToggle.onValueChanged.AddListener(ToggleMuteBGM);
         }
@@ -42,15 +57,19 @@ public class MenuAudioManager : MonoBehaviour
         // 3. GẮN SỰ KIỆN CHO SFX
         if (sfxSlider != null)
         {
+            sfxSlider.onValueChanged.RemoveListener(SetSFXVolume);
             sfxSlider.value = 1f;
             sfxSlider.onValueChanged.AddListener(SetSFXVolume);
         }
 
         if (muteSfxToggle != null)
         {
+            muteSfxToggle.onValueChanged.RemoveListener(ToggleMuteSFX);
             muteSfxToggle.isOn = false;
             muteSfxToggle.onValueChanged.AddListener(ToggleMuteSFX);
         }
+
+        isInitialized = true;
     }
 
     // --- XỬ LÝ NHẠC NỀN (BGM) ---
@@ -61,7 +80,6 @@ public class MenuAudioManager : MonoBehaviour
 
     public void ToggleMuteBGM(bool isMuted)
     {
-        // Tắt/bật riêng kênh BGM của FMOD
         bgmBus.setMute(isMuted);
     }
 
@@ -71,7 +89,6 @@ public class MenuAudioManager : MonoBehaviour
         sfxBus.setVolume(volume);
         savedUnitySfxVolume = volume;
 
-        // Nếu SFX đang không bị Mute thì mới cập nhật sang Unity Audio
         if (muteSfxToggle != null && !muteSfxToggle.isOn)
         {
             AudioListener.volume = volume;
@@ -80,10 +97,8 @@ public class MenuAudioManager : MonoBehaviour
 
     public void ToggleMuteSFX(bool isMuted)
     {
-        // 1. Tắt/bật kênh SFX của FMOD
         sfxBus.setMute(isMuted);
 
-        // 2. Tắt/bật Unity Audio
         if (isMuted)
         {
             AudioListener.volume = 0f;
