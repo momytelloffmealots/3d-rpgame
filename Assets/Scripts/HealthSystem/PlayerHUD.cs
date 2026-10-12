@@ -188,11 +188,13 @@ public class PlayerHUD : MonoBehaviour
 
         hpTextStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 16,
+            fontSize = 15,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false
         };
         hpTextStyle.normal.textColor = Color.white;
+        hpTextStyle.padding = new RectOffset(0, 0, 0, 0);
 
         deathTitleStyle = new GUIStyle(GUI.skin.label)
         {
@@ -212,9 +214,9 @@ public class PlayerHUD : MonoBehaviour
 
         guideHeaderStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 14,
+            fontSize = 13,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.UpperLeft
+            alignment = TextAnchor.MiddleLeft
         };
         guideHeaderStyle.normal.textColor = new Color(1f, 0.85f, 0.3f);
 
@@ -222,21 +224,22 @@ public class PlayerHUD : MonoBehaviour
         {
             fontSize = 12,
             fontStyle = FontStyle.Normal,
-            alignment = TextAnchor.UpperLeft
+            alignment = TextAnchor.UpperLeft,
+            wordWrap = true
         };
         guideStyle.normal.textColor = new Color(0.9f, 0.9f, 0.9f);
 
         victoryTitleStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 46,
+            fontSize = 44,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
-        victoryTitleStyle.normal.textColor = new Color(1f, 0.84f, 0f); // Vàng ánh kim
+        victoryTitleStyle.normal.textColor = new Color(1f, 0.84f, 0f);
 
         victorySubtitleStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 19,
+            fontSize = 18,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
@@ -254,9 +257,11 @@ public class PlayerHUD : MonoBehaviour
         {
             fontSize = 13,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false
         };
         tvBossTextStyle.normal.textColor = Color.white;
+        tvBossTextStyle.padding = new RectOffset(0, 0, 0, 0);
 
         stylesInitialized = true;
     }
@@ -328,7 +333,7 @@ public class PlayerHUD : MonoBehaviour
         float hpPercent = Mathf.Clamp01(displayedHealth / maxHp);
 
         float barWidth = 280f;
-        float barHeight = 28f;
+        float barHeight = 30f;
         float posX = 30f;
         float posY = Screen.height - 60f;
 
@@ -353,18 +358,22 @@ public class PlayerHUD : MonoBehaviour
         GUI.DrawTexture(new Rect(posX, posY, barWidth * hpPercent, barHeight), whiteTexture);
         GUI.color = oldColor;
 
-        // Chữ HP
+        // Chữ HP (Đã fix lệch chữ)
         string hpText = $"HP: {Mathf.CeilToInt(currentHp)} / {Mathf.CeilToInt(maxHp)}";
-        GUI.color = Color.black;
-        GUI.Label(new Rect(posX + 1, posY + 1, barWidth, barHeight), hpText, hpTextStyle);
-        GUI.color = Color.white;
-        GUI.Label(new Rect(posX, posY, barWidth, barHeight), hpText, hpTextStyle);
+        Rect labelRect = new Rect(posX, posY, barWidth, barHeight);
+
+        // Căn bóng chữ chuẩn
+        hpTextStyle.normal.textColor = Color.black;
+        GUI.Label(new Rect(labelRect.x + 1, labelRect.y + 1, labelRect.width, labelRect.height), hpText, hpTextStyle);
+
+        hpTextStyle.normal.textColor = Color.white;
+        GUI.Label(labelRect, hpText, hpTextStyle);
     }
 
     private void DrawTVBossBar()
     {
-        float barW = 380f;
-        float barH = 26f;
+        float barW = 400f;
+        float barH = 30f;
         float posX = (Screen.width - barW) / 2f;
         float posY = 20f;
 
@@ -375,17 +384,20 @@ public class PlayerHUD : MonoBehaviour
         GUI.color = new Color(0.05f, 0.05f, 0.05f, 0.85f);
         GUI.DrawTexture(new Rect(posX - 4, posY - 4, barW + 8, barH + 8), whiteTexture);
 
-        // Thanh máu TV (Cam rực / Đỏ)
+        // Thanh máu TV (Cam rực)
         GUI.color = new Color(0.95f, 0.35f, 0.12f, 1f);
         GUI.DrawTexture(new Rect(posX, posY, barW * hpPercent, barH), whiteTexture);
         GUI.color = oldColor;
 
-        // Chữ máu TV
-        string text = $"MỤC TIÊU: TV [ {Mathf.CeilToInt(tvCurrentHealth)} / {Mathf.CeilToInt(tvMaxHealth)} HP ]";
-        GUI.color = Color.black;
-        GUI.Label(new Rect(posX + 1, posY + 1, barW, barH), text, tvBossTextStyle);
-        GUI.color = Color.white;
-        GUI.Label(new Rect(posX, posY, barW, barH), text, tvBossTextStyle);
+        // Chữ máu TV (Đã fix lệch chữ)
+        string text = $"MỤC TIÊU: TV  [ {Mathf.CeilToInt(tvCurrentHealth)} / {Mathf.CeilToInt(tvMaxHealth)} HP ]";
+        Rect labelRect = new Rect(posX, posY, barW, barH);
+
+        tvBossTextStyle.normal.textColor = Color.black;
+        GUI.Label(new Rect(labelRect.x + 1, labelRect.y + 1, labelRect.width, labelRect.height), text, tvBossTextStyle);
+
+        tvBossTextStyle.normal.textColor = Color.white;
+        GUI.Label(labelRect, text, tvBossTextStyle);
     }
 
     private void DrawDeathScreen()
@@ -434,21 +446,21 @@ public class PlayerHUD : MonoBehaviour
         GUI.color = oldColor;
 
         // Tiêu đề CHIẾN THẮNG
-        GUI.Label(new Rect(centerX - 300, centerY - 120, 600, 60), "★ CHIẾN THẮNG! ★", victoryTitleStyle);
+        GUI.Label(new Rect(boxX, boxY + 30, boxW, 50), "★ CHIẾN THẮNG! ★", victoryTitleStyle);
 
         // Phụ đề
-        GUI.Label(new Rect(centerX - 300, centerY - 50, 600, 35), "Bạn đã phá hủy thành công TV mục tiêu (200 HP)!", victorySubtitleStyle);
+        GUI.Label(new Rect(boxX + 20, boxY + 100, boxW - 40, 40), "Bạn đã phá hủy thành công TV mục tiêu (200 HP)!", victorySubtitleStyle);
 
         // Nút CHƠI LẠI
-        float btnW = 240f;
-        float btnH = 55f;
-        if (GUI.Button(new Rect(centerX - btnW / 2, centerY + 15, btnW, btnH), "CHƠI LẠI", victoryBtnStyle))
+        float btnW = 220f;
+        float btnH = 50f;
+        if (GUI.Button(new Rect(centerX - btnW / 2, boxY + 175, btnW, btnH), "CHƠI LẠI", victoryBtnStyle))
         {
             RestartGame();
         }
 
         // Gợi ý phím tắt
-        GUI.Label(new Rect(centerX - 300, centerY + 85, 600, 30), "(Hoặc nhấn phím [Enter] / [R] để chơi lại)", guideStyle);
+        GUI.Label(new Rect(boxX, boxY + 245, boxW, 30), "(Hoặc nhấn phím [Enter] / [R] để chơi lại)", victorySubtitleStyle);
     }
 
     /// <summary>
@@ -470,8 +482,8 @@ public class PlayerHUD : MonoBehaviour
 
     private void DrawGuideBox()
     {
-        float width = 310f;
-        float height = 230f;
+        float width = 320f;
+        float height = 240f;
         float posX = Screen.width - width - 20f;
         float posY = 20f;
 
@@ -482,7 +494,7 @@ public class PlayerHUD : MonoBehaviour
         GUI.color = oldColor;
 
         // Tiêu đề
-        GUI.Label(new Rect(posX + 15, posY + 10, width - 30, 25), "THỬ NGHIỆM HỆ THỐNG SÁT THƯƠNG", guideHeaderStyle);
+        GUI.Label(new Rect(posX + 15, posY + 12, width - 30, 22), "THỬ NGHIỆM HỆ THỐNG SÁT THƯƠNG", guideHeaderStyle);
 
         string content =
             "• Bắn TV (200 HP) : CHIẾN THẮNG (Victory)!\n" +
@@ -495,6 +507,6 @@ public class PlayerHUD : MonoBehaviour
             "• Nhảy từ độ cao > 3.5m : Sát thương rơi\n" +
             "• [F1] : Ẩn / Hiện bảng hướng dẫn này";
 
-        GUI.Label(new Rect(posX + 15, posY + 35, width - 30, height - 45), content, guideStyle);
+        GUI.Label(new Rect(posX + 15, posY + 40, width - 30, height - 50), content, guideStyle);
     }
 }
