@@ -128,7 +128,7 @@ public class PlayerHUD : MonoBehaviour
         FirstPersonCharacter fp = Object.FindAnyObjectByType<FirstPersonCharacter>();
         if (fp != null) fp.enabled = false;
 
-        foreach (var rot in Object.FindObjectsByType<MouseRotator>(FindObjectsInactive.Include))
+        foreach (var rot in Object.FindObjectsByType<MouseRotator>(FindObjectsSortMode.None))
         {
             if (rot != null) rot.enabled = false;
         }
