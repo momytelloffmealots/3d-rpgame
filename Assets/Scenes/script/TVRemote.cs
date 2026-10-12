@@ -18,9 +18,6 @@ public class TVRemote : MonoBehaviour
         // Tạo tia laze từ giữa màn hình bắn thẳng ra trước
         Ray ray = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
 
-        // VẼ TIA LAZE MÀU ĐỎ TRONG CỬA SỔ SCENE (tồn tại 2 giây) để bạn dễ nhìn
-        Debug.DrawRay(ray.origin, ray.direction * interactDistance, Color.red, 2f);
-
         if (Physics.Raycast(ray, out RaycastHit hit, interactDistance))
         {
             Debug.Log("🎯 TIA ĐÃ BẮN TRÚNG VẬT: " + hit.collider.gameObject.name);
