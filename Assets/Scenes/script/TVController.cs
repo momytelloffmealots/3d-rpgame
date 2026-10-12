@@ -10,24 +10,28 @@ public class TVController : MonoBehaviour
     private EventInstance tvInstance;
 
     [Header("Cấu hình số đếm (Đã khớp với FMOD)")]
-    public int maxChannelIndex = 2; // chanel 3 là số 2
-    public int shutdownIndex = 3;   // shutdown là số 3
-    public int noiseIndex = 4;      // noise là số 4
+    public int maxChannelIndex = 2;
+    public int shutdownIndex = 3;
+    public int noiseIndex = 4;
     public float noiseDuration = 0.25f;
 
-    private int currentChannelIndex = 0; // Bắt đầu ở chanel 1 (số 0)
+    private int currentChannelIndex = 0;
     private float currentVolume = 1f;
-    private bool isTVOn = true;
+
+    // 1. Sửa chỗ này thành false để mặc định TV đang tắt
+    private bool isTVOn = false;
+
     private Coroutine switchRoutine;
 
     void Start()
     {
         tvInstance = RuntimeManager.CreateInstance(tvEvent);
         RuntimeManager.AttachInstanceToGameObject(tvInstance, transform, GetComponent<Rigidbody>());
-        tvInstance.start();
 
-        // Mới vào game thì phát kênh đầu tiên
-        UpdateTVState(currentChannelIndex);
+        // 2. Chuyển tham số FMOD sang mốc tắt để chuẩn bị sẵn
+        UpdateTVState(shutdownIndex);
+
+        // Đã xóa dòng tvInstance.start() ở đây để TV hoàn toàn im lặng lúc mới vào game
     }
 
     public void NextChannel()
@@ -37,7 +41,7 @@ public class TVController : MonoBehaviour
         currentChannelIndex++;
         if (currentChannelIndex > maxChannelIndex)
         {
-            currentChannelIndex = 0; // Vòng lại chanel 1
+            currentChannelIndex = 0;
         }
 
         if (switchRoutine != null) StopCoroutine(switchRoutine);
@@ -48,16 +52,12 @@ public class TVController : MonoBehaviour
     {
         isTVOn = !isTVOn;
 
-        // Dừng các hiệu ứng chuyển kênh đang dở dang
         if (switchRoutine != null) StopCoroutine(switchRoutine);
 
         if (isTVOn)
         {
             // BẬT TIVI: 
-            // 1. Đánh thức FMOD sống lại (vì lúc tắt xong nó đã tự ngủ đông)
             tvInstance.start();
-
-            // 2. Chạy hiệu ứng xẹt xẹt nhiễu sóng trước khi chiếu kênh
             switchRoutine = StartCoroutine(SwitchWithNoise());
         }
         else
@@ -76,18 +76,13 @@ public class TVController : MonoBehaviour
 
     private IEnumerator SwitchWithNoise()
     {
-        // 1. Chuyển tham số sang tiếng xẹt xẹt (Số 4)
         UpdateTVState(noiseIndex);
-
         yield return new WaitForSeconds(noiseDuration);
-
-        // 2. Chuyển tham số sang kênh mới
         UpdateTVState(currentChannelIndex);
     }
 
     private void UpdateTVState(int targetIndex)
     {
-        // Gửi chính xác số thứ tự sang FMOD
         tvInstance.setParameterByName("Chanel", targetIndex);
         tvInstance.setParameterByName("Volume", currentVolume);
     }
