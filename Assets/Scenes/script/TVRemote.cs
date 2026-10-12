@@ -1,12 +1,18 @@
 using UnityEngine;
+using FMODUnity; // Nhớ phải có dòng này để dùng FMOD
 
 public class TVRemote : MonoBehaviour
 {
     [Header("Remote Settings")]
-    public float interactDistance = 5f;
+    public float interactDistance = 10f; // Tầm bắn laze
+
+    [Header("FMOD Audio")]
+    [Tooltip("Kéo Event âm thanh bấm nút điều khiển vào đây")]
+    public EventReference clickSoundEvent; // Biến chứa âm thanh bấm nút
 
     void Update()
     {
+        // Các phím bấm giữ nguyên
         if (Input.GetKeyDown(KeyCode.F)) UseRemote("channel");
         if (Input.GetKeyDown(KeyCode.X)) UseRemote("power");
         if (Input.GetKeyDown(KeyCode.Period)) UseRemote("volume", 0.1f);
@@ -15,18 +21,24 @@ public class TVRemote : MonoBehaviour
 
     private void UseRemote(string action, float amount = 0f)
     {
-        // Tạo tia laze từ giữa màn hình bắn thẳng ra trước
+        // 1. PHÁT ÂM THANH BẤM NÚT TRƯỚC TIÊN
+        if (!clickSoundEvent.IsNull)
+        {
+            // Phát tiếng bấm nút ngay tại vị trí của chiếc điều khiển (transform.position)
+            RuntimeManager.PlayOneShot(clickSoundEvent, transform.position);
+        }
+
+        // 2. BẮN TIA LAZE ĐỂ KIỂM TRA TƯƠNG TÁC
         Ray ray = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
+        Debug.DrawRay(ray.origin, ray.direction * interactDistance, Color.red, 2f);
 
         if (Physics.Raycast(ray, out RaycastHit hit, interactDistance))
         {
-            Debug.Log("🎯 TIA ĐÃ BẮN TRÚNG VẬT: " + hit.collider.gameObject.name);
-
             TVController tv = hit.collider.GetComponent<TVController>();
+            RollingDoor door = hit.collider.GetComponent<RollingDoor>();
 
             if (tv != null)
             {
-                Debug.Log("✅ TÌM THẤY SCRIPT TV! Đang thực hiện lệnh: " + action);
                 switch (action)
                 {
                     case "channel": tv.NextChannel(); break;
@@ -34,14 +46,11 @@ public class TVRemote : MonoBehaviour
                     case "volume": tv.ChangeVolume(amount); break;
                 }
             }
-            else
+            else if (door != null && action == "power")
             {
-                Debug.LogWarning("⚠️ Bắn trúng " + hit.collider.gameObject.name + ", nhưng vật này KHÔNG GẮN script TVController!");
+                Debug.Log("🚪 Đã bắn trúng Cửa cuốn! Đang cuộn cửa...");
+                door.ToggleDoor();
             }
-        }
-        else
-        {
-            Debug.Log("❌ TIA TRƯỢT: Không bắn trúng vật gì cả (Hãy lại gần hơn hoặc nhìn thẳng vào TV).");
         }
     }
 }
