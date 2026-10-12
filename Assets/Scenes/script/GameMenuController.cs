@@ -7,97 +7,65 @@ public class GameMenuController : MonoBehaviour
     public GameObject menuCanvas;
 
     [Header("Player & Camera Controls")]
-    [Tooltip("Kéo toàn bộ script điều khiển (ví dụ: FirstPersonCharacter, MouseRotator, WeaponSystem) vào đây để tắt khi mở Menu")]
+    [Tooltip("Danh sách script cần vô hiệu hóa khi mở Menu (FirstPersonCharacter, MouseRotator...)")]
     public List<MonoBehaviour> scriptsToDisable = new List<MonoBehaviour>();
 
     [Header("Pause Settings")]
-    [Tooltip("Tích chọn nếu muốn dừng thời gian game (Time.timeScale = 0). Bỏ tích nếu muốn menu không làm đứng game.")]
     public bool pauseGameTime = false;
 
-    private bool isMenuOpen = false;
+    public static bool IsMenuOpen { get; private set; } = false;
 
-    void Start()
+    private void Start()
     {
-        if (menuCanvas != null && menuCanvas.activeSelf)
-        {
-            menuCanvas.SetActive(false);
-        }
+        SetMenuState(false);
     }
 
-    void Update()
+    private void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             ToggleMenu();
         }
-
-        // BẢO VỆ CHUỘT: Khi menu đang mở, luôn giữ chuột mở tự do.
-        // Ngăn chặn các script khác (như FirstPersonCharacter bắt MouseButtonUp) cướp lại và giấu chuột đi.
-        if (isMenuOpen)
-        {
-            if (Cursor.lockState != CursorLockMode.None)
-            {
-                Cursor.lockState = CursorLockMode.None;
-            }
-            if (!Cursor.visible)
-            {
-                Cursor.visible = true;
-            }
-        }
     }
 
     public void ToggleMenu()
     {
-        isMenuOpen = !isMenuOpen;
-
-        if (menuCanvas != null)
-        {
-            menuCanvas.SetActive(isMenuOpen);
-        }
-
-        if (isMenuOpen)
-        {
-            // MỞ MENU:
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-
-            if (pauseGameTime)
-            {
-                Time.timeScale = 0f;
-            }
-
-            // Tắt các script điều khiển
-            foreach (var script in scriptsToDisable)
-            {
-                if (script != null)
-                    script.enabled = false;
-            }
-        }
-        else
-        {
-            // ĐÓNG MENU:
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-
-            if (pauseGameTime)
-            {
-                Time.timeScale = 1f;
-            }
-
-            // Bật lại các script
-            foreach (var script in scriptsToDisable)
-            {
-                if (script != null)
-                    script.enabled = true;
-            }
-        }
+        SetMenuState(!IsMenuOpen);
     }
 
     public void CloseMenu()
     {
-        if (isMenuOpen)
+        if (IsMenuOpen) SetMenuState(false);
+    }
+
+    private void SetMenuState(bool open)
+    {
+        IsMenuOpen = open;
+
+        if (menuCanvas != null)
         {
-            ToggleMenu();
+            menuCanvas.SetActive(IsMenuOpen);
+        }
+
+        // Đồng bộ trạng thái Chuột & Thời gian
+        Cursor.lockState = IsMenuOpen ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = IsMenuOpen;
+
+        if (pauseGameTime)
+        {
+            Time.timeScale = IsMenuOpen ? 0f : 1f;
+        }
+
+        // Bật/Tắt các script điều khiển
+        foreach (var script in scriptsToDisable)
+        {
+            if (script != null) script.enabled = !IsMenuOpen;
+        }
+
+        // Khi mở Menu -> Gọi làm tươi giao diện Slider/Toggle âm thanh
+        if (IsMenuOpen && MenuAudioManager.Instance != null)
+        {
+            MenuAudioManager.Instance.RefreshUIAndAudio();
         }
     }
 }
