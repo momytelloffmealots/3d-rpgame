@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using FMODUnity;
 using HealthSystem;
+using Sydewa;
 
 /// <summary>
 /// Hệ thống máu của người chơi (Player Health).
@@ -25,6 +26,10 @@ public class PlayerHealth : Health
     public AudioClip dieSoundFallback;
     [Tooltip("Cooldown giữa các lần phát hurt sound (tránh spam khi trúng đòn liên tục)")]
     public float hurtSoundCooldown = 0.15f;
+
+    [Header("=== BACKGROUND MUSIC CONTROL ===")]
+    [Tooltip("Tự động tắt nhạc nền (BGM) khi người chơi tử trận và bật lại khi hồi sinh")]
+    public bool stopBGMOnDeath = true;
 
     [Header("=== RESPAWN & SETTINGS ===")]
     [Tooltip("Điểm hồi sinh khi chết (để trống sẽ dùng vị trí xuất phát ban đầu)")]
@@ -225,6 +230,12 @@ public class PlayerHealth : Health
 
         // Kích hoạt sự kiện chết
         OnDeathEvent?.Invoke();
+
+        // Tắt nhạc nền BGM khi chết
+        if (stopBGMOnDeath)
+        {
+            HandleDeathBGM();
+        }
     }
 
     private IEnumerator AnimateDeathCamera()
@@ -294,8 +305,62 @@ public class PlayerHealth : Health
 
         Debug.Log("[PlayerHealth] Người chơi đã HỒI SINH!");
 
+        // Bật lại nhạc nền BGM khi hồi sinh
+        if (stopBGMOnDeath)
+        {
+            HandleRespawnBGM();
+        }
+
         OnRespawnEvent?.Invoke();
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+    }
+
+    private void HandleDeathBGM()
+    {
+        if (MenuAudioManager.Instance != null)
+        {
+            MenuAudioManager.Instance.OnPlayerDied();
+        }
+        else
+        {
+            // Dự phòng nếu MenuAudioManager chưa kích hoạt
+            FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
+            bgmBus.setMute(true);
+            bgmBus.setPaused(true);
+            bgmBus.setVolume(0f);
+
+            LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
+            if (lm != null)
+            {
+                lm.SetBGMPaused(true);
+            }
+        }
+    }
+
+    private void HandleRespawnBGM()
+    {
+        if (MenuAudioManager.Instance != null)
+        {
+            MenuAudioManager.Instance.OnPlayerRespawned();
+        }
+        else
+        {
+            // Dự phòng nếu MenuAudioManager chưa kích hoạt
+            float savedVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
+            bool isMuted = PlayerPrefs.GetInt("Setting_BGM_Mute", 0) == 1;
+
+            FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
+            bgmBus.setMute(isMuted);
+            bgmBus.setPaused(isMuted);
+            bgmBus.setVolume(isMuted ? 0f : savedVol);
+
+            LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
+            if (lm != null)
+            {
+                lm.SetBGMPaused(isMuted);
+                lm.SetBGMVolume(isMuted ? 0f : savedVol);
+            }
+        }
     }
 
     // ==========================================

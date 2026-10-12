@@ -108,6 +108,8 @@ namespace Sydewa
                 if (!dayNightBGMEvent.IsNull)
                 {
                     bgmInstance = FMODUnity.RuntimeManager.CreateInstance(dayNightBGMEvent);
+                    float initialBgmVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
+                    bgmInstance.setVolume(initialBgmVol);
                     bgmInstance.start(); // Bắt đầu phát nhạc
                 }
             }
@@ -187,6 +189,28 @@ namespace Sydewa
             }
         }
         // ---------------------------------------------------
+
+        /// <summary>
+        /// Tạm dừng hoặc tiếp tục phát nhạc nền FMOD (dùng khi người chơi chết / hồi sinh)
+        /// </summary>
+        public void SetBGMPaused(bool isPaused)
+        {
+            if (bgmInstance.isValid())
+            {
+                bgmInstance.setPaused(isPaused);
+            }
+        }
+
+        /// <summary>
+        /// Điều chỉnh âm lượng nhạc nền FMOD
+        /// </summary>
+        public void SetBGMVolume(float volume)
+        {
+            if (bgmInstance.isValid())
+            {
+                bgmInstance.setVolume(volume);
+            }
+        }
 
         //This function is called whenever we want to reset all events
         public void ResetEvents()
