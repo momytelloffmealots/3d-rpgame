@@ -89,10 +89,13 @@ public class TVController : MonoBehaviour
             }
         }
 
-        // 4. Khởi tạo âm thanh FMOD
-        tvInstance = RuntimeManager.CreateInstance(tvEvent);
-        RuntimeManager.AttachInstanceToGameObject(tvInstance, gameObject, GetComponent<Rigidbody>());
-        UpdateTVState(shutdownIndex);
+        // 4. Khởi tạo âm thanh FMOD 3D gắn chặt vào vị trí chiếc TV
+        if (!tvEvent.IsNull)
+        {
+            tvInstance = RuntimeManager.CreateInstance(tvEvent);
+            RuntimeManager.AttachInstanceToGameObject(tvInstance, gameObject, GetComponent<Rigidbody>());
+            UpdateTVState(shutdownIndex);
+        }
     }
 
     private void EnsureColliderExists()
@@ -118,10 +121,14 @@ public class TVController : MonoBehaviour
     {
         if (isDestroyed) return;
 
-        // ÉP FMOD PHẢI BÁM CHẶT LẤY VỊ TRÍ CỦA TV MỖI KHUNG HÌNH (DÙ BỊ NÉM ĐI)
-        tvInstance.set3DAttributes(FMODUnity.RuntimeUtils.To3DAttributes(gameObject));
-        // Hệ thống cản âm chỉ chạy khi TV đang bật và đã gắn Player
-        if (isTVOn && playerTransform != null)
+        // Công nghệ 1 - 3D Positional Audio: Cập nhật tọa độ 3D của TV cho FMOD mỗi khung hình
+        if (tvInstance.isValid())
+        {
+            tvInstance.set3DAttributes(RuntimeUtils.To3DAttributes(gameObject));
+        }
+
+        // Công nghệ 3 - Audio Occlusion: Chỉ bắn tia kiểm tra vật cản khi TV đang bật
+        if (isTVOn && playerTransform != null && tvInstance.isValid())
         {
             CheckOcclusion();
         }
@@ -237,19 +244,17 @@ public class TVController : MonoBehaviour
     }
 
     // ==========================================
-    // CÁC HÀM ĐIỀU KHIỂN BẰNG REMOTE & CẢN ÂM
+    // CÁC HÀM ĐIỀU KHIỂN BẰNG REMOTE & CẢN ÂM (OCCLUSION)
     // ==========================================
 
+    /// <summary>
+    /// Công nghệ Cản âm (Audio Occlusion):
+    /// Bắn tia Linecast từ TV đến Player. Nếu vướng tường (obstacleLayer) thì kéo Parameter "Filter" lên 1
+    /// để FMOD kích hoạt bộ lọc làm đục tiếng (Lowpass) và làm mượt chuyển tiếp bằng Mathf.Lerp.
+    /// </summary>
     private void CheckOcclusion()
     {
-        if (Physics.Linecast(transform.position, playerTransform.position, obstacleLayer))
-        {
-            targetFilter = 1f; // Bị tường chắn -> Đục tiếng
-        }
-        else
-        {
-            targetFilter = 0f; // Không bị chắn -> Trong trẻo
-        }
+        targetFilter = Physics.Linecast(transform.position, playerTransform.position, obstacleLayer) ? 1f : 0f;
 
         if (Mathf.Abs(currentFilter - targetFilter) > 0.01f)
         {
@@ -276,7 +281,7 @@ public class TVController : MonoBehaviour
 
         if (isTVOn)
         {
-            tvInstance.start();
+            if (tvInstance.isValid()) tvInstance.start();
             switchRoutine = StartCoroutine(SwitchWithNoise());
         }
         else
@@ -289,7 +294,7 @@ public class TVController : MonoBehaviour
     {
         if (!isTVOn || isDestroyed) return;
         currentVolume = Mathf.Clamp(currentVolume + amount, 0f, 1f);
-        tvInstance.setParameterByName("Volume", currentVolume);
+        if (tvInstance.isValid()) tvInstance.setParameterByName("Volume", currentVolume);
     }
 
     private IEnumerator SwitchWithNoise()
@@ -299,9 +304,12 @@ public class TVController : MonoBehaviour
         UpdateTVState(currentChannelIndex);
     }
 
+    /// <summary>
+    /// Công nghệ 2 - Dynamic FMOD Parameters: Thay đổi kênh ("Chanel") và âm lượng ("Volume") trực tiếp trên Event đang chạy.
+    /// </summary>
     private void UpdateTVState(int targetIndex)
     {
-        if (isDestroyed) return;
+        if (isDestroyed || !tvInstance.isValid()) return;
         tvInstance.setParameterByName("Chanel", targetIndex);
         tvInstance.setParameterByName("Volume", currentVolume);
     }

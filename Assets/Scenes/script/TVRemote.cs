@@ -21,14 +21,14 @@ public class TVRemote : MonoBehaviour
 
     private void UseRemote(string action, float amount = 0f)
     {
-        // 1. PHÁT ÂM THANH BẤM NÚT TRƯỚC TIÊN
+        // 1. PlayOneShot: Phát âm thanh bấm nút 1 lần tại vị trí chiếc điều khiển trong không gian 3D
         if (!clickSoundEvent.IsNull)
         {
-            // Phát tiếng bấm nút ngay tại vị trí của chiếc điều khiển (transform.position)
             RuntimeManager.PlayOneShot(clickSoundEvent, transform.position);
         }
 
-        // 2. BẮN TIA LAZE ĐỂ KIỂM TRA TƯƠNG TÁC
+        // 2. Bắn tia Raycast từ tâm Camera để điều khiển TV hoặc Cửa cuốn
+        if (Camera.main == null) return;
         Ray ray = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
         Debug.DrawRay(ray.origin, ray.direction * interactDistance, Color.red, 2f);
 

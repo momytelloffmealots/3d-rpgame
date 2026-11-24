@@ -91,8 +91,9 @@ public class PlayerHealth : Health
             audioSource.spatialBlend = 0f; // 2D cho âm thanh của chính người chơi
         }
 
-        // Báo cho UI lượng máu ban đầu
+        // Báo cho UI lượng máu ban đầu & đồng bộ FMOD Health Snapshot
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        AudioSnapshotController.Instance?.UpdatePlayerHealth(currentHealth, maxHealth, dead);
     }
 
     private void Update()
@@ -161,9 +162,10 @@ public class PlayerHealth : Health
 
         Debug.Log($"[PlayerHealth] Người chơi nhận {damage:F1} sát thương từ [{source}]. Còn lại: {currentHealth:F1}/{maxHealth:F1} HP");
 
-        // Gọi sự kiện
+        // Gọi sự kiện & cập nhật FMOD Health (nếu < 25% sẽ tự bật nhịp tim + Health Low snapshot)
         OnDamageTaken?.Invoke(damage, source);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        AudioSnapshotController.Instance?.UpdatePlayerHealth(currentHealth, maxHealth, currentHealth <= 0 && canDie);
 
         if (currentHealth <= 0 && canDie)
         {
@@ -189,6 +191,7 @@ public class PlayerHealth : Health
 
         OnHeal?.Invoke(amount);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        AudioSnapshotController.Instance?.UpdatePlayerHealth(currentHealth, maxHealth, dead);
     }
 
     /// <summary>
@@ -201,8 +204,9 @@ public class PlayerHealth : Health
 
         Debug.Log("[PlayerHealth] Người chơi ĐÃ TỬ TRẬN!");
 
-        // Phát âm thanh khi chết
+        // Phát âm thanh khi chết & tắt nhịp tim Low-Health
         PlayDieSound();
+        AudioSnapshotController.Instance?.UpdatePlayerHealth(currentHealth, maxHealth, true);
 
         // Vô hiệu hóa điều khiển người chơi
         if (fpCharacter != null) fpCharacter.enabled = false;
@@ -305,113 +309,107 @@ public class PlayerHealth : Health
 
         Debug.Log("[PlayerHealth] Người chơi đã HỒI SINH!");
 
-        // Bật lại nhạc nền BGM khi hồi sinh
+        // Bật lại nhạc nền BGM & cập nhật FMOD Health khi hồi sinh
         if (stopBGMOnDeath)
         {
             HandleRespawnBGM();
         }
 
+        AudioSnapshotController.Instance?.UpdatePlayerHealth(currentHealth, maxHealth, dead);
         OnRespawnEvent?.Invoke();
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
     private void HandleDeathBGM()
     {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetPlayerDead(true);
+            return;
+        }
+
         if (MenuAudioManager.Instance != null)
         {
             MenuAudioManager.Instance.OnPlayerDied();
+            return;
         }
-        else
-        {
-            // Dự phòng nếu MenuAudioManager chưa kích hoạt
-            FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
-            bgmBus.setMute(true);
-            bgmBus.setPaused(true);
-            bgmBus.setVolume(0f);
 
-            LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
-            if (lm != null)
-            {
-                lm.SetBGMPaused(true);
-            }
-        }
+        // Dự phòng nếu Scene chưa gắn AudioManager / MenuAudioManager
+        FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
+        bgmBus.setMute(true);
+        bgmBus.setPaused(true);
+        bgmBus.setVolume(0f);
+
+        LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
+        if (lm != null) lm.SetBGMPaused(true);
     }
 
     private void HandleRespawnBGM()
     {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetPlayerDead(false);
+            return;
+        }
+
         if (MenuAudioManager.Instance != null)
         {
             MenuAudioManager.Instance.OnPlayerRespawned();
+            return;
         }
-        else
+
+        // Dự phòng nếu Scene chưa gắn AudioManager / MenuAudioManager
+        float savedVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
+        bool isMuted = PlayerPrefs.GetInt("Setting_BGM_Mute", 0) == 1;
+
+        FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
+        bgmBus.setMute(isMuted);
+        bgmBus.setPaused(isMuted);
+        bgmBus.setVolume(isMuted ? 0f : savedVol);
+
+        LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
+        if (lm != null)
         {
-            // Dự phòng nếu MenuAudioManager chưa kích hoạt
-            float savedVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
-            bool isMuted = PlayerPrefs.GetInt("Setting_BGM_Mute", 0) == 1;
-
-            FMOD.Studio.Bus bgmBus = RuntimeManager.GetBus("bus:/BGM");
-            bgmBus.setMute(isMuted);
-            bgmBus.setPaused(isMuted);
-            bgmBus.setVolume(isMuted ? 0f : savedVol);
-
-            LightingManager lm = UnityEngine.Object.FindAnyObjectByType<LightingManager>();
-            if (lm != null)
-            {
-                lm.SetBGMPaused(isMuted);
-                lm.SetBGMVolume(isMuted ? 0f : savedVol);
-            }
+            lm.SetBGMPaused(isMuted);
+            lm.SetBGMVolume(isMuted ? 0f : savedVol);
         }
     }
 
     // ==========================================
-    // ÂM THANH FMOD / FALLBACK
+    // ÂM THANH FMOD / FALLBACK (Ưu tiên FMOD -> dự phòng AudioClip Unity)
     // ==========================================
 
     private void PlayHurtSound()
     {
+        // Chống phát dồn dập khi trúng nhiều viên đạn liên tiếp
         if (Time.time < lastHurtSoundTime + hurtSoundCooldown)
             return;
         lastHurtSoundTime = Time.time;
 
-        // 1. Ưu tiên FMOD Event
-        if (!hurtSoundFMOD.IsNull)
-        {
-            FMOD.Studio.EventInstance inst = RuntimeManager.CreateInstance(hurtSoundFMOD);
-            inst.set3DAttributes(RuntimeUtils.To3DAttributes(gameObject));
-            inst.start();
-            inst.release();
-        }
-        // 2. Dự phòng AudioClip của Unity
-        else if (hurtSoundFallback != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(hurtSoundFallback);
-        }
-        // 3. Thông báo console nếu chưa gán
-        else
-        {
-            Debug.Log("[PlayerHealth] >> HURT SOUND TRIGGERED (FMOD Placeholder: Hãy kéo Event vào ô hurtSoundFMOD)");
-        }
+        PlayFMODOrFallback(hurtSoundFMOD, hurtSoundFallback, "HURT");
     }
 
     private void PlayDieSound()
     {
-        // 1. Ưu tiên FMOD Event
-        if (!dieSoundFMOD.IsNull)
+        PlayFMODOrFallback(dieSoundFMOD, dieSoundFallback, "DIE");
+    }
+
+    private void PlayFMODOrFallback(EventReference fmodEvent, AudioClip fallbackClip, string label)
+    {
+        // 1. Ưu tiên phát FMOD Event ở tọa độ 3D của nhân vật
+        if (!fmodEvent.IsNull)
         {
-            FMOD.Studio.EventInstance inst = RuntimeManager.CreateInstance(dieSoundFMOD);
-            inst.set3DAttributes(RuntimeUtils.To3DAttributes(gameObject));
-            inst.start();
-            inst.release();
+            RuntimeManager.PlayOneShot(fmodEvent, transform.position);
         }
-        // 2. Dự phòng AudioClip của Unity
-        else if (dieSoundFallback != null && audioSource != null)
+        // 2. Dự phòng AudioClip của Unity nếu chưa gán FMOD Event
+        else if (fallbackClip != null && audioSource != null)
         {
-            audioSource.PlayOneShot(dieSoundFallback);
+            audioSource.PlayOneShot(fallbackClip);
         }
-        // 3. Thông báo console nếu chưa gán
+        // 3. Log hướng dẫn nếu thiếu cả hai
         else
         {
-            Debug.Log("[PlayerHealth] >> DIE SOUND TRIGGERED (FMOD Placeholder: Hãy kéo Event vào ô dieSoundFMOD)");
+            Debug.Log($"[PlayerHealth] >> {label} SOUND TRIGGERED (Chưa gán FMOD Event hoặc Fallback Clip)");
         }
     }
 }

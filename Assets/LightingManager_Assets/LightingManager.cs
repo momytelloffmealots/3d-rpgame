@@ -102,15 +102,15 @@ namespace Sydewa
                 ResetEvents();
             }
 
-            // --- FMOD: KHỞI TẠO VÀ PHÁT NHẠC (Chỉ khi chơi game) ---
-            if (Application.isPlaying)
+            // --- FMOD: KHỞI TẠO NHẠC NỀN ĐỘNG THEO NGÀY/ĐÊM (Chỉ chạy khi Play Mode) ---
+            if (Application.isPlaying && !dayNightBGMEvent.IsNull)
             {
-                if (!dayNightBGMEvent.IsNull)
+                bgmInstance = FMODUnity.RuntimeManager.CreateInstance(dayNightBGMEvent);
+                float initialBgmVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
+                if (bgmInstance.isValid())
                 {
-                    bgmInstance = FMODUnity.RuntimeManager.CreateInstance(dayNightBGMEvent);
-                    float initialBgmVol = PlayerPrefs.GetFloat("Setting_BGM_Volume", 0.25f);
                     bgmInstance.setVolume(initialBgmVol);
-                    bgmInstance.start(); // Bắt đầu phát nhạc
+                    bgmInstance.start();
                 }
             }
             // --------------------------------------------------------
@@ -136,10 +136,9 @@ namespace Sydewa
                     UpdateMoonLighting(TimeOfDay / 24f);
                 }
 
-                // --- FMOD: CẬP NHẬT PARAMETER "hours" LIÊN TỤC ---
+                // --- FMOD DYNAMIC MUSIC: Truyền giờ hiện tại (0..24) vào Parameter "hours" để chuyển nhạc Sáng/Trưa/Tối ---
                 if (bgmInstance.isValid())
                 {
-                    // Tên parameter "hours" phải viết thường y hệt như trong FMOD Studio
                     bgmInstance.setParameterByName("hours", TimeOfDay);
                 }
                 // -------------------------------------------------

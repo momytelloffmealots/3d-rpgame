@@ -28,7 +28,7 @@ public class RollingDoor : MonoBehaviour
     {
         isOpen = !isOpen;
 
-        // Phát âm thanh
+        // PlayOneShotAttached: Gắn nguồn âm 3D bám theo GameObject cửa khi cửa đang trượt lên/xuống
         if (!doorSoundEvent.IsNull)
         {
             RuntimeManager.PlayOneShotAttached(doorSoundEvent, gameObject);

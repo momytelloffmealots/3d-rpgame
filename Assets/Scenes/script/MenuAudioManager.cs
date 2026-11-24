@@ -3,6 +3,11 @@ using UnityEngine.UI;
 using FMODUnity;
 using FMOD.Studio;
 
+/// <summary>
+/// Cầu nối giữa giao diện Menu (Slider / Toggle) và hệ thống âm lượng FMOD.
+/// Nếu Scene có AudioManager: ủy quyền toàn bộ điều khiển Bus & PlayerPrefs cho AudioManager.
+/// Nếu Scene chưa có AudioManager (như main.unity): tự kết nối trực tiếp bus:/BGM và bus:/SFX dự phòng.
+/// </summary>
 public class MenuAudioManager : MonoBehaviour
 {
     public static MenuAudioManager Instance { get; private set; }
@@ -37,7 +42,6 @@ public class MenuAudioManager : MonoBehaviour
     private const string LAST_SFX_VOL_KEY = "Setting_Last_SFX_Volume";
     private const string BGM_MUTE_KEY = "Setting_BGM_Mute";
     private const string SFX_MUTE_KEY = "Setting_SFX_Mute";
-
     private const float MIN_VOL = 0.0001f;
 
     private void Awake()
@@ -48,7 +52,6 @@ public class MenuAudioManager : MonoBehaviour
 
     private void OnEnable()
     {
-        // Khi Menu bật lên: Luôn luôn kết nối lại FMOD và đồng bộ UI
         ConnectFMODAndSync();
         HookPlayerHealth();
     }
@@ -59,27 +62,29 @@ public class MenuAudioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// KẾT NỐI TRỰC TIẾP VỚI FMOD MỖI LẦN MỞ MENU
-    /// Không cache cố định biến Bus, luôn lấy Bus mới nhất từ FMOD RuntimeManager
+    /// Kết nối lại FMOD Bus mới nhất, gắn listener cho UI và đồng bộ âm lượng.
     /// </summary>
     public void ConnectFMODAndSync()
     {
-        // 1. Luôn kết nối lại FMOD Bus mới nhất (kể cả sau khi restart Play Mode)
-        ReconnectFMODBuses();
+        if (AudioManager.Instance == null)
+            ReconnectFMODBuses();
+        else
+            SyncStateFromAudioManager();
 
-        // 2. Gắn sự kiện cho các Slider/Toggle
         SetupUIListeners();
-
-        // 3. Đưa Slider/Toggle về đúng vị trí đã lưu
         SyncUIWithSettings();
-
-        // 4. Bơm ngay âm lượng và trạng thái mute vào FMOD và Unity
         ApplyAllAudioStates();
     }
 
-    public void RefreshUIAndAudio()
+    public void RefreshUIAndAudio() => ConnectFMODAndSync();
+
+    private void SyncStateFromAudioManager()
     {
-        ConnectFMODAndSync();
+        AudioManager am = AudioManager.Instance;
+        currentBgmVolume = am.CurrentBgmVolume;
+        currentSfxVolume = am.CurrentSfxVolume;
+        isBgmMuted = am.IsBgmMuted;
+        isSfxMuted = am.IsSfxMuted;
     }
 
     private void ReconnectFMODBuses()
@@ -109,26 +114,24 @@ public class MenuAudioManager : MonoBehaviour
 
     private void SetupUIListeners()
     {
-        if (bgmSlider != null)
-        {
-            bgmSlider.onValueChanged.RemoveListener(SetBGMVolume);
-            bgmSlider.onValueChanged.AddListener(SetBGMVolume);
-        }
-        if (sfxSlider != null)
-        {
-            sfxSlider.onValueChanged.RemoveListener(SetSFXVolume);
-            sfxSlider.onValueChanged.AddListener(SetSFXVolume);
-        }
-        if (muteBgmToggle != null)
-        {
-            muteBgmToggle.onValueChanged.RemoveListener(ToggleMuteBGM);
-            muteBgmToggle.onValueChanged.AddListener(ToggleMuteBGM);
-        }
-        if (muteSfxToggle != null)
-        {
-            muteSfxToggle.onValueChanged.RemoveListener(ToggleMuteSFX);
-            muteSfxToggle.onValueChanged.AddListener(ToggleMuteSFX);
-        }
+        BindSlider(bgmSlider, SetBGMVolume);
+        BindSlider(sfxSlider, SetSFXVolume);
+        BindToggle(muteBgmToggle, ToggleMuteBGM);
+        BindToggle(muteSfxToggle, ToggleMuteSFX);
+    }
+
+    private void BindSlider(Slider slider, UnityEngine.Events.UnityAction<float> handler)
+    {
+        if (slider == null) return;
+        slider.onValueChanged.RemoveListener(handler);
+        slider.onValueChanged.AddListener(handler);
+    }
+
+    private void BindToggle(Toggle toggle, UnityEngine.Events.UnityAction<bool> handler)
+    {
+        if (toggle == null) return;
+        toggle.onValueChanged.RemoveListener(handler);
+        toggle.onValueChanged.AddListener(handler);
     }
 
     private void SyncUIWithSettings()
@@ -159,170 +162,182 @@ public class MenuAudioManager : MonoBehaviour
         }
     }
 
-    // --- BGM LOGIC ---
+    // --- ĐIỀU KHIỂN NHẠC NỀN (BGM) ---
     public void SetBGMVolume(float volume)
     {
-        if (volume <= MIN_VOL)
+        if (AudioManager.Instance != null)
         {
-            isBgmMuted = true;
-            currentBgmVolume = MIN_VOL;
-        }
-        else
-        {
-            isBgmMuted = false;
-            currentBgmVolume = volume;
-            lastBgmVolumeBeforeMute = volume;
+            AudioManager.Instance.SetBGMVolume(volume);
+            SyncStateFromAudioManager();
+            SyncUIWithSettings();
+            return;
         }
 
-        SaveBGMSettings();
+        ApplyLocalVolume(volume, ref currentBgmVolume, ref lastBgmVolumeBeforeMute, ref isBgmMuted);
+        SaveSettings(BGM_VOL_KEY, LAST_BGM_VOL_KEY, BGM_MUTE_KEY, currentBgmVolume, lastBgmVolumeBeforeMute, isBgmMuted);
         SyncUIWithSettings();
         ApplyBGMVolume();
     }
 
     public void ToggleMuteBGM(bool isMuted)
     {
-        isBgmMuted = isMuted;
-
-        if (isMuted)
+        if (AudioManager.Instance != null)
         {
-            if (currentBgmVolume > MIN_VOL) lastBgmVolumeBeforeMute = currentBgmVolume;
-            currentBgmVolume = MIN_VOL;
-        }
-        else
-        {
-            currentBgmVolume = (lastBgmVolumeBeforeMute > MIN_VOL) ? lastBgmVolumeBeforeMute : defaultBgmVolume;
+            AudioManager.Instance.SetBGMMuted(isMuted);
+            SyncStateFromAudioManager();
+            SyncUIWithSettings();
+            return;
         }
 
-        SaveBGMSettings();
+        ApplyLocalMute(isMuted, defaultBgmVolume, ref currentBgmVolume, ref lastBgmVolumeBeforeMute, ref isBgmMuted);
+        SaveSettings(BGM_VOL_KEY, LAST_BGM_VOL_KEY, BGM_MUTE_KEY, currentBgmVolume, lastBgmVolumeBeforeMute, isBgmMuted);
         SyncUIWithSettings();
         ApplyBGMVolume();
     }
 
-    private void SaveBGMSettings()
-    {
-        PlayerPrefs.SetFloat(BGM_VOL_KEY, currentBgmVolume);
-        PlayerPrefs.SetFloat(LAST_BGM_VOL_KEY, lastBgmVolumeBeforeMute);
-        PlayerPrefs.SetInt(BGM_MUTE_KEY, isBgmMuted ? 1 : 0);
-        PlayerPrefs.Save();
-    }
-
-    private void ApplyBGMVolume()
-    {
-        bool shouldMute = isBgmMuted || isPlayerDead;
-        float finalVol = shouldMute ? MIN_VOL : currentBgmVolume;
-
-        // 1. Luôn kết nối lại Bus nếu mất hiệu lực
-        if (!bgmBus.isValid())
-        {
-            ReconnectFMODBuses();
-        }
-
-        // 2. Gửi lệnh vào FMOD Bus
-        if (bgmBus.isValid())
-        {
-            bgmBus.setMute(shouldMute);
-            bgmBus.setVolume(finalVol);
-        }
-
-        // 3. Đồng bộ với BGM của LightingManager (Day/Night BGM)
-        //LightingManager lm = Object.FindAnyObjectByType<LightingManager>();
-        //if (lm != null)
-        //{
-        //    lm.SetBGMPaused(shouldMute);
-        //    lm.SetBGMVolume(finalVol);
-        //}
-
-    }
-
-    // --- SFX LOGIC ---
+    // --- ĐIỀU KHIỂN HIỆU ỨNG (SFX) ---
     public void SetSFXVolume(float volume)
     {
-        if (volume <= MIN_VOL)
+        if (AudioManager.Instance != null)
         {
-            isSfxMuted = true;
-            currentSfxVolume = MIN_VOL;
-        }
-        else
-        {
-            isSfxMuted = false;
-            currentSfxVolume = volume;
-            lastSfxVolumeBeforeMute = volume;
+            AudioManager.Instance.SetSFXVolume(volume);
+            SyncStateFromAudioManager();
+            SyncUIWithSettings();
+            return;
         }
 
-        SaveSFXSettings();
+        ApplyLocalVolume(volume, ref currentSfxVolume, ref lastSfxVolumeBeforeMute, ref isSfxMuted);
+        SaveSettings(SFX_VOL_KEY, LAST_SFX_VOL_KEY, SFX_MUTE_KEY, currentSfxVolume, lastSfxVolumeBeforeMute, isSfxMuted);
         SyncUIWithSettings();
         ApplySFXVolume();
     }
 
     public void ToggleMuteSFX(bool isMuted)
     {
-        isSfxMuted = isMuted;
-
-        if (isMuted)
+        if (AudioManager.Instance != null)
         {
-            if (currentSfxVolume > MIN_VOL) lastSfxVolumeBeforeMute = currentSfxVolume;
-            currentSfxVolume = MIN_VOL;
-        }
-        else
-        {
-            currentSfxVolume = (lastSfxVolumeBeforeMute > MIN_VOL) ? lastSfxVolumeBeforeMute : defaultSfxVolume;
+            AudioManager.Instance.SetSFXMuted(isMuted);
+            SyncStateFromAudioManager();
+            SyncUIWithSettings();
+            return;
         }
 
-        SaveSFXSettings();
+        ApplyLocalMute(isMuted, defaultSfxVolume, ref currentSfxVolume, ref lastSfxVolumeBeforeMute, ref isSfxMuted);
+        SaveSettings(SFX_VOL_KEY, LAST_SFX_VOL_KEY, SFX_MUTE_KEY, currentSfxVolume, lastSfxVolumeBeforeMute, isSfxMuted);
         SyncUIWithSettings();
         ApplySFXVolume();
     }
 
-    private void SaveSFXSettings()
+    private void ApplyLocalVolume(float volume, ref float current, ref float lastBeforeMute, ref bool muted)
     {
-        PlayerPrefs.SetFloat(SFX_VOL_KEY, currentSfxVolume);
-        PlayerPrefs.SetFloat(LAST_SFX_VOL_KEY, lastSfxVolumeBeforeMute);
-        PlayerPrefs.SetInt(SFX_MUTE_KEY, isSfxMuted ? 1 : 0);
+        if (volume <= MIN_VOL)
+        {
+            muted = true;
+            current = MIN_VOL;
+        }
+        else
+        {
+            muted = false;
+            current = volume;
+            lastBeforeMute = volume;
+        }
+    }
+
+    private void ApplyLocalMute(bool isMuted, float fallback, ref float current, ref float lastBeforeMute, ref bool muted)
+    {
+        muted = isMuted;
+        if (isMuted)
+        {
+            if (current > MIN_VOL) lastBeforeMute = current;
+            current = MIN_VOL;
+        }
+        else
+        {
+            current = (lastBeforeMute > MIN_VOL) ? lastBeforeMute : fallback;
+        }
+    }
+
+    private void SaveSettings(string volKey, string lastKey, string muteKey, float vol, float lastVol, bool muted)
+    {
+        PlayerPrefs.SetFloat(volKey, vol);
+        PlayerPrefs.SetFloat(lastKey, lastVol);
+        PlayerPrefs.SetInt(muteKey, muted ? 1 : 0);
         PlayerPrefs.Save();
+    }
+
+    private void ApplyBGMVolume()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.ApplyAllVolumes();
+            return;
+        }
+
+        bool shouldMute = isBgmMuted || isPlayerDead;
+        ApplyBus(ref bgmBus, shouldMute, currentBgmVolume);
     }
 
     private void ApplySFXVolume()
     {
-        float finalVol = isSfxMuted ? 0f : currentSfxVolume;
-
-        // 1. Luôn kết nối lại Bus nếu mất hiệu lực
-        if (!sfxBus.isValid())
+        if (AudioManager.Instance != null)
         {
-            ReconnectFMODBuses();
+            AudioManager.Instance.ApplyAllVolumes();
+            return;
         }
 
-        // 2. Gửi lệnh vào FMOD Bus
-        if (sfxBus.isValid())
-        {
-            sfxBus.setMute(isSfxMuted);
-            sfxBus.setVolume(isSfxMuted ? MIN_VOL : currentSfxVolume);
-        }
+        ApplyBus(ref sfxBus, isSfxMuted, currentSfxVolume);
+    }
 
-        // 3. Unity AudioListener volume
-        AudioListener.volume = finalVol;
+    private void ApplyBus(ref Bus bus, bool mute, float volume)
+    {
+        if (!bus.isValid()) ReconnectFMODBuses();
+        if (!bus.isValid()) return;
+
+        bus.setMute(mute);
+        bus.setVolume(mute ? MIN_VOL : volume);
     }
 
     private void ApplyAllAudioStates()
     {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.ApplyAllVolumes();
+            return;
+        }
+
         ApplyBGMVolume();
         ApplySFXVolume();
     }
 
-    public void OnPlayerDied() 
-    { 
-        isPlayerDead = true; 
-        ApplyBGMVolume(); 
+    public void OnPlayerDied()
+    {
+        isPlayerDead = true;
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetPlayerDead(true);
+        else
+            ApplyBGMVolume();
     }
 
-    public void OnPlayerRespawned() 
-    { 
-        isPlayerDead = false; 
-        ApplyBGMVolume(); 
+    public void OnPlayerRespawned()
+    {
+        isPlayerDead = false;
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetPlayerDead(false);
+        else
+            ApplyBGMVolume();
     }
 
     [ContextMenu("Reset All Audio Settings To Default")]
     public void ResetToDefault()
     {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.ResetToDefault();
+            SyncStateFromAudioManager();
+            SyncUIWithSettings();
+            return;
+        }
+
         PlayerPrefs.DeleteKey(BGM_VOL_KEY);
         PlayerPrefs.DeleteKey(SFX_VOL_KEY);
         PlayerPrefs.DeleteKey(LAST_BGM_VOL_KEY);
@@ -338,10 +353,7 @@ public class MenuAudioManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (Instance == this)
-        {
-            Instance = null;
-        }
+        if (Instance == this) Instance = null;
         if (playerHealth != null)
         {
             playerHealth.OnDeathEvent -= OnPlayerDied;

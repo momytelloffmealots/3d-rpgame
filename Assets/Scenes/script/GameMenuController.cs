@@ -67,5 +67,13 @@ public class GameMenuController : MonoBehaviour
         {
             MenuAudioManager.Instance.RefreshUIAndAudio();
         }
+
+        // Bật/tắt FMOD Pause Snapshot (giảm nhẹ BGM/SFX khi mở menu)
+        AudioSnapshotController.Instance?.SetPaused(IsMenuOpen);
+    }
+
+    private void OnDestroy()
+    {
+        AudioSnapshotController.Instance?.SetPaused(false);
     }
 }
